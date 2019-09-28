@@ -675,19 +675,23 @@ function WebSqlPouch(opts, callback) {
     
     var sqlArgs = [];
     var criteria = [];
-
+    var keyChunks = [];
     if (keys) {
+
       var destinctKeys = [];
-      var bindingStr = "";
       keys.forEach(function (key) {
         if (destinctKeys.indexOf(key) === -1) {
           destinctKeys.push(key);
-          bindingStr += '?,';
         }
       });
-      bindingStr = bindingStr.substring(0, bindingStr.length - 1); // keys is never empty
-      criteria.push(DOC_STORE + '.id IN (' + bindingStr + ')');
-      sqlArgs = sqlArgs.concat(destinctKeys);
+
+      for (var index = 0; index < destinctKeys.length; index += 999) {
+        var chunk = destinctKeys.slice(index, index + 999);
+        if (chunk.length > 0) {
+          keyChunks.push(chunk);
+        }
+      }
+        
     } else if (key !== false) {
       criteria.push(DOC_STORE + '.id = ?');
       sqlArgs.push(key);
@@ -733,19 +737,69 @@ function WebSqlPouch(opts, callback) {
         return;
       }
 
-      // do a single query to fetch the documents
-      var sql = select(
-        SELECT_DOCS,
-        [DOC_STORE, BY_SEQ_STORE],
-        DOC_STORE_AND_BY_SEQ_JOINER,
-        criteria,
-        DOC_STORE + '.id ' + (descending ? 'DESC' : 'ASC')
-        );
-      sql += ' LIMIT ' + limit + ' OFFSET ' + offset;
+      if (keys) {
 
-      tx.executeSql(sql, sqlArgs, function (tx, result) {
-        for (var i = 0, l = result.rows.length; i < l; i++) {
-          var item = result.rows.item(i);
+        var finishedCount = 0;
+        var allRows = [];
+        keyChunks.forEach(function (keyChunk) {
+
+          sqlArgs = [];
+          criteria = [];
+          var bindingStr = "";
+          keyChunk.forEach(function () {
+            bindingStr += '?,';
+          });
+          bindingStr = bindingStr.substring(0, bindingStr.length - 1); // keys is never empty
+          criteria.push(DOC_STORE + '.id IN (' + bindingStr + ')');
+          sqlArgs = sqlArgs.concat(keyChunk);
+
+          var sql = select(
+            SELECT_DOCS,
+            [DOC_STORE, BY_SEQ_STORE],
+            DOC_STORE_AND_BY_SEQ_JOINER,
+            criteria,
+            DOC_STORE + '.id ' + (descending ? 'DESC' : 'ASC')
+          );
+          sql += ' LIMIT ' + limit + ' OFFSET ' + offset;
+          tx.executeSql(sql, sqlArgs, function (tx, result) {
+            finishedCount++;
+            for (var index = 0; index < result.rows.length; index++) {
+              allRows.push(result.rows.item(index));
+            }
+            if (finishedCount === keyChunks.length) {
+              processResult(allRows);
+            }
+
+          });
+
+        });
+
+
+      } else {
+
+        // do a single query to fetch the documents
+        var sql = select(
+          SELECT_DOCS,
+          [DOC_STORE, BY_SEQ_STORE],
+          DOC_STORE_AND_BY_SEQ_JOINER,
+          criteria,
+          DOC_STORE + '.id ' + (descending ? 'DESC' : 'ASC')
+        );
+        sql += ' LIMIT ' + limit + ' OFFSET ' + offset;
+        tx.executeSql(sql, sqlArgs, function (tx, result) {
+          var rows = [];
+          for (var index = 0; index < result.rows.length; index++) {
+            rows.push(result.rows.item(index));
+          }
+          processResult(rows);
+        });
+
+      }
+
+      function processResult(rows) {
+
+        for (var i = 0, l = rows.length; i < l; i++) {
+          var item = rows[i];
           var metadata = safeJsonParse(item.metadata);
           var id = metadata.id;
           var data = unstringifyDoc(item.data, id, item.rev);
@@ -792,7 +846,10 @@ function WebSqlPouch(opts, callback) {
             }
           });
         }
-      });
+
+      }
+
+      
     }, websqlError(callback), function () {
       var returnVal = {
         total_rows: totalRows,
