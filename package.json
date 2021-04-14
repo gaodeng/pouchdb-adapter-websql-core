@@ -1,11 +1,26 @@
 {
   "name": "pouchdb-adapter-websql-core",
-  "version": "7.0.0-prerelease",
+  "version": "7.2.2",
   "description": "Underlying adapter code for WebSQL and SQLite-based PouchDB adapters.",
   "main": "./lib/index.js",
   "keywords": [],
   "author": "Dale Harvey <dale@arandomurl.com>",
   "license": "Apache-2.0",
   "repository": "https://github.com/pouchdb/pouchdb",
-  "jsnext:main": "./src/index.js"
+  "jsnext:main": "./lib/index.es.js",
+  "dependencies": {
+    "pouchdb-adapter-utils": "7.2.2",
+    "pouchdb-binary-utils": "7.2.2",
+    "pouchdb-collections": "7.2.2",
+    "pouchdb-errors": "7.2.2",
+    "pouchdb-json": "7.2.2",
+    "pouchdb-merge": "7.2.2",
+    "pouchdb-utils": "7.2.2"
+  },
+  "module": "./lib/index.es.js",
+  "files": [
+    "lib",
+    "dist",
+    "tonic-example.js"
+  ]
 }
